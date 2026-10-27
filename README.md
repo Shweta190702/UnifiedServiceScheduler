@@ -9,8 +9,15 @@
 
 ---
 
-## 1. "The Lead Engineer Mindset": AI Audits & Interventions
+## 1. AI Collaboration Narrative
 
+### 1.1 High-Level Strategy for Guiding the AI
+For this assessment, I utilized Generative AI as an interactive, high-velocity engineering collaborator. The high-level strategy followed a structured **"Architect-First, Verify-Always"** workflow:
+1. **Strategic Decomposition:** Instead of prompting for a monolithic solution, I directed the AI to generate isolated, decoupled layers adhering to Clean Architecture and Domain-Driven Design (Domain, Application, Infrastructure, API).
+2. **Boilerplate & Syntax Acceleration:** I delegated repetitive scaffolding to the AI—such as generating entity records, DTO models, EF Core configuration shims, and FluentValidation rules.
+3. **Strict Domain Invariants:** Core domain concepts—such as half-open interval arithmetic, dual-resource synchronization (bay + technician), and concurrency controls—were tightly constrained by explicit human-led instructions.
+
+### 1.2 Process for Verifying and Refining AI Output
 This codebase is not a textbook AI-generated sample. It was constructed under strict Principal-level architectural scrutiny, where **every AI blindspot, performance trap, and subtle race condition was caught, challenged, and eliminated**.
 
 ```mermaid
@@ -30,14 +37,14 @@ graph TD
     I5 --> F5["Replaced mock setups with real aggregate fakes; added TaskCompletionSource barrier for true races"]
 ```
 
-### Critical Oversight #1: The Half-Open Interval & ORM Backdoor
+#### Critical Oversight #1: The Half-Open Interval & ORM Backdoor
 * **The AI Blindspot:** The AI initially emitted `private TimeSlot() { /* EF-core shim */ }`, called the overlap check `ConflictsWith`, and left room for inclusive boundary collisions (`<=` and `>=`).
 * **The Lead Engineer Intervention:** 
   1. **Zero ORM Backdoors:** Parameterless constructors exist solely to satisfy ORM reflection and allow invalid, empty value objects to bypass invariant constructors. Stripped entirely.
   2. **Canonical Half-Open Semantics:** Appointment intervals are mathematically half-open $[Start, End)$. If Slot A ends at `10:00:00.000 AM` and Slot B starts at `10:00:00.000 AM`, they do **not** conflict. Enforced canonical formula:
      $$\text{OverlapsWith}(A, B) \iff A.\text{Start} < B.\text{End} \land A.\text{End} > B.\text{Start}$$
 
-### Critical Oversight #2: The In-Memory Filtering OOM Trap & Check-Then-Save Race
+#### Critical Oversight #2: The In-Memory Filtering OOM Trap & Check-Then-Save Race
 * **The AI Blindspot:** The initial draft proposed loading appointments into memory via `repo.GetAll()` and filtering with LINQ (`.Where(a => a.Slot.OverlapsWith(target))`), combined with a naive check-then-save pattern:
   ```csharp
   // VULNERABLE PATTERN:
@@ -49,12 +56,12 @@ graph TD
   1. **Storage-Engine Offloading:** Offloaded schedule collision checks to indexed SQL queries (`WHERE NOT EXISTS (SELECT 1 FROM Bookings WHERE StartTime < @End AND EndTime > @Start)`). Under real dealership volume (tens of thousands of appointments), in-memory filtering causes linear latency degradation and Out-Of-Memory (OOM) crashes.
   2. **Pessimistic Row-Level Locking:** Wrapped resource allocation in an explicit transaction using `SELECT ... FROM "Technicians" WHERE "Id" = @id FOR UPDATE` and `SELECT ... FROM "ServiceBays" ... FOR UPDATE`. Thread B blocks at the database engine level until Thread A commits, eliminating the race window entirely.
 
-### Critical Oversight #3: Ineffective Concurrency Tokens on Independent Records
+#### Critical Oversight #3: Ineffective Concurrency Tokens on Independent Records
 * **The AI Blindspot:** Proposed adding an optimistic `RowVersion` / concurrency token to the `Appointment` entity.
 * **The Lead Engineer Intervention:** Pointed out that Customer A and Customer B insert **two entirely separate rows** into the `Appointments` table (`Appointment #101` and `Appointment #102`). A `RowVersion` on `Appointment` never collides across different rows!
   - **The Fix:** Configured shadow concurrency tokens on the **shared scarce resources**: `Technician` and `ServiceBay`. When two transactions attempt to add bookings to the same technician, EF Core's update statement detects the stale version and triggers `DbUpdateConcurrencyException`.
 
-### Critical Oversight #4: TimeZone Drift & API Leakage
+#### Critical Oversight #4: TimeZone Drift & API Leakage
 * **The AI Blindspot:** The API controller accepted client-local `DateTimeOffset` without UTC normalization, allowed past bookings, and leaked raw exception stack traces on standard business rejections.
 * **The Lead Engineer Intervention:**
   1. Enforced UTC normalization at the ingestion boundary (`request.ScheduledStartTime.ToUniversalTime()`).
@@ -64,9 +71,15 @@ graph TD
      - Ingestion failures: `400 Bad Request`
      - Success: `201 Created` with canonical `Location: /api/v1/appointments/{id}`.
 
-### Critical Oversight #5: The Mocking Trap in Test Suites
+#### Critical Oversight #5: The Mocking Trap in Test Suites
 * **The AI Blindspot:** The initial unit test suite used `Mock<ITechnicianRepository>` to return pre-filtered lists of technicians (`.ReturnsAsync([technician])`). The test was asserting mock configuration rather than testing domain availability logic.
 * **The Lead Engineer Intervention:** Mandated real in-memory repository fakes (`InMemoryTechnicianRepository`, `InMemoryServiceBayRepository`) holding authentic aggregate instances. In addition, replaced sequential `Task.Yield()` calls in concurrency tests with a **`TaskCompletionSource` barrier** to force genuinely simultaneous thread releases against the database lock.
+
+### 1.3 Ensuring Final Code Quality & Production Readiness
+To guarantee production-grade reliability:
+1. **Core Domain Invariants:** Tested directly without ORM dependencies in `tests/UnifiedServiceScheduler.Tests/Domain/TimeSlotAndSchedulingDomainTests.cs`.
+2. **Deterministic Concurrency Proofs:** Integration tests simulate sub-second race conditions using a `TaskCompletionSource` barrier in `ConcurrentSchedulingIntegrationTests.cs`.
+3. **End-to-End Edge Case Suite:** 12 modular shell scripts (`case0_*.sh` through `case11_*.sh`) assert exact HTTP status codes (`201`, `400`, `404`, `409`, `422`).
 
 ---
 
@@ -254,25 +267,75 @@ Large automotive groups (e.g., AutoNation, Penske, Lithia) operate hundreds of r
 
 ---
 
-## 5. Project Setup & Local Execution
+## 5. How to Build, Run, and Test the Application
 
-### Prerequisites
+### 5.1 Prerequisites
 * [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
-* [PostgreSQL 16+](https://www.postgresql.org/download/) with `contrib` package (for `btree_gist`)
+* [PostgreSQL 16+](https://www.postgresql.org/download/) (or runs against local Docker/PostgreSQL instance)
 
-### Build & Test
+---
+
+### 5.2 Build the Application
+Restore and build the complete 5-project solution:
 ```bash
-# 1. Restore and build solution
 dotnet build UnifiedServiceScheduler.sln
+```
 
-# 2. Run xUnit test suite (concurrency, domain invariants, boundaries)
+---
+
+### 5.3 Run the Web API
+Start the ASP.NET Core Kestrel server on port `5050`:
+```bash
+cd src/Api
+dotnet run
+```
+*API will be listening at:* `http://localhost:5050`  
+*Swagger Documentation:* `http://localhost:5050/swagger` (when enabled)  
+*Dev Inspection Endpoint:* `http://localhost:5050/api/v1/dev/tables`
+
+---
+
+### 5.4 Test Suite (Validating Core Business Logic)
+The project includes automated xUnit tests validating domain invariants, temporal boundaries, and concurrency race conditions:
+```bash
+# Run all unit and integration test suites:
 dotnet test tests/UnifiedServiceScheduler.Tests/UnifiedServiceScheduler.Tests.csproj --logger "console;verbosity=detailed"
 ```
 
-### Database Schema Initialization (PostgreSQL)
+**Key Test Coverage:**
+1. **`TimeSlotAndSchedulingDomainTests.cs`**:
+   - `Schedule_BackToBackAppointments_Exact10AmBoundary_ShouldSucceed` (Validates $[Start, End)$ half-open interval).
+   - `Schedule_BoundaryCollisionBySingleMillisecond_ThrowsConflictException` (Proves millisecond collision detection).
+   - `Schedule_TechnicianMissingRequiredSkill_ThrowsDomainExceptionOrFails` (Validates skill certification invariant).
+   - `Schedule_OutsideOperatingHours_SpillsPastClosing_Fails` (Enforces 18:00 UTC closing).
+2. **`SchedulingEngineApplicationTests.cs`**:
+   - `Schedule_BayOccupied_FailsWithoutAllocatingTechnician` (Validates dual-resource isolation).
+   - `Schedule_TechnicianMissingRequiredSkill_ReturnsSkillMismatchError` (Maps to RFC 7807 422).
+3. **`ConcurrentSchedulingIntegrationTests.cs`**:
+   - `Schedule_ConcurrentBookingForLastRemainingSlot_OnlyOneSucceeds` (Uses `TaskCompletionSource` barrier to prove thread-safety).
+
+---
+
+### 5.5 Run End-to-End Edge Case Demonstrations (Bash Test Harnesses)
+With the API running on port `5050`, execute the modular curl demonstration scripts:
+
 ```bash
-# Enable required PostgreSQL extension and exclusion constraints:
-psql -U postgres -d unified_scheduler -f src/Infrastructure/Persistence/Scripts/01_postgresql_exclusion_constraints.sql
+# 1. Run the master test runner (executes all cases with summary report):
+./run_assessment_demo.sh
+
+# Or run individual edge cases:
+./case0_reset_and_seed.sh            # Reset database & seed baseline entities
+./case1_happy_path.sh                # Normal booking (201 Created)
+./case8_adjacent_back_to_back.sh     # Half-open back-to-back booking (201 Created)
+./case2_bay_available_tech_busy.sh   # Bay free, tech busy (409 Conflict)
+./case3_tech_available_bay_busy.sh   # Tech free, bay busy (409 Conflict)
+./case4_tech_available_unqualified.sh# Missing skill level (422 Unprocessable)
+./case5_both_unavailable.sh          # All resources exhausted (409 Conflict)
+./case6_simultaneous_contention.sh   # Millisecond race condition (201 vs 409)
+./case7_idempotent_double_click.sh   # Sub-200ms double-click idempotency
+./case9_temporal_overlaps.sh         # Head, tail, and nested interval collisions
+./case10_boundary_rejections.sh      # Operating hours & past dates (400 Bad Request)
+./case11_domain_invariants.sh        # Zero duration & invalid GUIDs (400 / 404)
 ```
 
 ---
