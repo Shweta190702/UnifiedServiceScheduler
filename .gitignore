@@ -1,0 +1,24 @@
+## Build and compile outputs
+bin/
+obj/
+out/
+[Bb]in/
+[Oo]bj/
+
+## Visual Studio / VS Code / Rider
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Temporary test files
+res.json
+test.json
+*.log
+
+## OS generated
+.DS_Store
+Thumbs.db
