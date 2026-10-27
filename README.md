@@ -158,6 +158,11 @@ flowchart TD
 
 ## 3. Concrete Verification Proof
 
+### Live Engine Demonstration Output
+The terminal harness validates the Keyloop automotive service scheduling scenarios live against the ASP.NET Core engine:
+
+![Keyloop Scheduling Scenarios Live Engine Verification](docs/screenshots/live_execution_output.png)
+
 The test suite in [`tests/UnifiedServiceScheduler.Tests`](file:///Users/shravan/.gemini/antigravity/scratch/UnifiedServiceScheduler/tests/UnifiedServiceScheduler.Tests) executes deterministic assertions against production code paths:
 
 ```
@@ -318,6 +323,8 @@ dotnet test tests/UnifiedServiceScheduler.Tests/UnifiedServiceScheduler.Tests.cs
 
 ### 5.5 Run End-to-End Edge Case Demonstrations (Bash Test Harnesses)
 With the API running on port `5050`, execute the modular curl demonstration scripts:
+
+![Keyloop Scheduling Scenarios Live Engine Verification](docs/screenshots/assessment_demonstration.png)
 
 ```bash
 # 1. Run the master test runner (executes all cases with summary report):
