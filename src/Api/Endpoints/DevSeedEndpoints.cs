@@ -50,15 +50,15 @@ public static class DevSeedEndpoints
             var inspectionService = ServiceType.Define(new ServiceTypeId(QuickInspectionServiceId), "Quick Multi-Point Inspection", "Brakes", TimeSpan.FromMinutes(30), SkillLevel.Journeyman, BayCapability.Lift, "30-min inspection.");
             await db.ServiceTypes.AddRangeAsync(brakeService, evService, transmissionService, inspectionService);
 
-            // 5. Technicians
+            // 5. Technicians (John has Brakes; Sarah has EV; Mike has Inspection)
             var tech1 = Technician.Hire(new TechnicianId(TechnicianId), dealership.Id, ContactInfo.Create("John", "Smith", "john.smith@dealership.com", "+1-555-0200"), "TECH-001");
             tech1.AddCertification(Certification.Create("Brakes", SkillLevel.Senior, new DateOnly(2025, 1, 1), new DateOnly(2028, 1, 1)));
 
             var tech2 = Technician.Hire(new TechnicianId(Technician2Id), dealership.Id, ContactInfo.Create("Sarah", "Connor", "sarah.connor@dealership.com", "+1-555-0202"), "TECH-002");
-            tech2.AddCertification(Certification.Create("Brakes", SkillLevel.Senior, new DateOnly(2025, 1, 1), new DateOnly(2028, 1, 1)));
+            tech2.AddCertification(Certification.Create("EV Powertrain", SkillLevel.Specialist, new DateOnly(2025, 1, 1), new DateOnly(2028, 1, 1)));
 
             var tech3 = Technician.Hire(new TechnicianId(Technician3Id), dealership.Id, ContactInfo.Create("Mike", "FreeTech", "mike.free@dealership.com", "+1-555-0203"), "TECH-003");
-            tech3.AddCertification(Certification.Create("Brakes", SkillLevel.Senior, new DateOnly(2025, 1, 1), new DateOnly(2028, 1, 1)));
+            tech3.AddCertification(Certification.Create("Inspection", SkillLevel.Journeyman, new DateOnly(2025, 1, 1), new DateOnly(2028, 1, 1)));
             await db.Technicians.AddRangeAsync(tech1, tech2, tech3);
 
             // 6. Service Bays
